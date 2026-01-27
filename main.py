@@ -37,19 +37,36 @@ def multiclass_nms(boxes, scores, nms_thr, score_thr):
     return out_boxes, out_scores, out_cls
 
 # Configuration
-IMAGE_SIZE = 416
-# IMAGE_SIZE = 640
-PROVIDER = "CPUExecutionProvider"
-# PROVIDER = "CUDAExecutionProvider"
-MODEL = "yolox_tiny.onnx"
-# MODEL = "yolox_nano.onnx"
-# MODEL = "yolox_s.onnx"
-# MODEL = "yolox_m.onnx"
-# MODEL = "yolox_l.onnx"
+# IMAGE_SIZE = 416
+IMAGE_SIZE = 640
+import argparse
+
+# Provider mapping
+PROVIDER_MAP = {
+    'cpu': 'CPUExecutionProvider',
+    'cuda': 'CUDAExecutionProvider',
+}
+
+parser = argparse.ArgumentParser(description="YOLOX Runtime")
+parser.add_argument('--device', type=str, default='cpu', choices=['cpu', 'cuda'],
+                    help='Select compute device: cpu or cuda (default: cpu)')
+parser.add_argument('--model', type=str, default='yolox_l.onnx',
+                    help='Path to ONNX model file (default: yolox_l.onnx)')
+args = parser.parse_args()
+
+PROVIDER = PROVIDER_MAP.get(args.device, 'CPUExecutionProvider')
+MODEL = args.model
 CONF_THRESHOLD = 0.8
 
 input_size = (IMAGE_SIZE, IMAGE_SIZE)
-session = ort.InferenceSession(MODEL, providers=[PROVIDER])
+
+try:
+    session = ort.InferenceSession(MODEL, providers=[PROVIDER])
+except Exception as e:
+    print(f"Failed to create ONNX Runtime session with provider {PROVIDER}: {e}")
+    print("Falling back to CPUExecutionProvider.")
+    session = ort.InferenceSession(MODEL, providers=['CPUExecutionProvider'])
+
 cap = cv2.VideoCapture(0)
 
 while True:
