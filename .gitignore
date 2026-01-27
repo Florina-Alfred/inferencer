@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Ignore all ONNX model files
+*.onnx
