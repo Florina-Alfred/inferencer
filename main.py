@@ -9,12 +9,21 @@ from utils import demo_postprocess, multiclass_nms
 # Configuration
 # IMAGE_SIZE = 416
 IMAGE_SIZE = 640
+input_size = (IMAGE_SIZE, IMAGE_SIZE)
 
 # Provider mapping
 PROVIDER_MAP = {
     "cpu": "CPUExecutionProvider",
     "cuda": "CUDAExecutionProvider",
 }
+MODEL_SHORT_TO_NAME = {
+    "l": "yolox_l",
+    "m": "yolox_m",
+    "s": "yolox_s",
+    "tiny": "yolox_tiny",
+    "nano": "yolox_nano",
+}
+CONF_THRESHOLD = 0.8
 
 
 parser = argparse.ArgumentParser(description="YOLOX Runtime")
@@ -36,18 +45,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 PROVIDER = PROVIDER_MAP.get(args.device, "CPUExecutionProvider")
-MODEL_SHORT_TO_NAME = {
-    "l": "yolox_l",
-    "m": "yolox_m",
-    "s": "yolox_s",
-    "tiny": "yolox_tiny",
-    "nano": "yolox_nano",
-}
 model_base = MODEL_SHORT_TO_NAME.get(args.model, "yolox_l")
 MODEL = f"model/{model_base}.onnx"
-CONF_THRESHOLD = 0.8
 
-input_size = (IMAGE_SIZE, IMAGE_SIZE)
 
 try:
     session = ort.InferenceSession(MODEL, providers=[PROVIDER])
