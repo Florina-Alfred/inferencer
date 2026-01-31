@@ -30,11 +30,11 @@ parser.add_argument(
     help="Confidence threshold from 0 to 1, default is 0.75. Use decimals (e.g., 0.83 for 83%).",
 )
 parser.add_argument(
+    "-s",
     "--source",
-    # type=int,
-    # default=0,
-    default="rtsp://localhost:9192/topic1",
-    help="Source of the camera (0 - webcam[v4l2], \"rtsp://localhost:9192/topic1\")",
+    type=str,
+    default="0",
+    help='Source of the camera (0 - webcam[v4l2], "rtsp://localhost:9192/topic1")',
 )
 args = parser.parse_args()
 
@@ -68,9 +68,13 @@ except Exception as e:
     print("Falling back to CPUExecutionProvider.")
     session = ort.InferenceSession(MODEL, providers=["CPUExecutionProvider"])
 
-cap = cv2.VideoCapture(int(args.source))
-# cap = cv2.VideoCapture(args.source, cv2.CAP_FFMPEG)
-# cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+try:
+    source = int(args.source)
+    cap = cv2.VideoCapture(source)
+except Exception:
+    source = str(args.source)
+    cap = cv2.VideoCapture(source, cv2.CAP_FFMPEG)
+    cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 while True:
     ret, frame = cap.read()
