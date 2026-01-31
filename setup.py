@@ -1,6 +1,7 @@
 import os
 import urllib.request
 from tqdm import tqdm
+import argparse
 
 YOLOX_MODELS = {
     "yolox_l": "https://huggingface.co/hr16/yolox-onnx/resolve/main/yolox_l.onnx",
@@ -16,7 +17,6 @@ class DownloadProgressBar(tqdm):
             self.total = tsize
         self.update(b * bsize - self.n)
 
-import argparse
 
 def main():
     parser = argparse.ArgumentParser(description="Download YOLOX ONNX models.")

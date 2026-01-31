@@ -1,18 +1,23 @@
 import cv2
 import argparse
+from loguru import logger
+import json
 import numpy as np
 import onnxruntime as ort
+import os
+from dotenv import load_dotenv
 
 from coco_classes import COCO_CLASSES
-from utils import demo_postprocess, multiclass_nms
+from utils import demo_postprocess, multiclass_nms, build_detection_records
 
+load_dotenv()
 
 parser = argparse.ArgumentParser(description="YOLOX Runtime")
 parser.add_argument(
     "-d",
     "--device",
     type=str,
-    default="cuda",
+    default=os.getenv("DEVICE"),
     choices=["cpu", "cuda"],
     help="Select compute device: cpu or cuda (default: cpu)",
 )
@@ -20,20 +25,20 @@ parser.add_argument(
     "-m",
     "--model",
     type=str,
-    default="l",
+    default=os.getenv("MODEL"),
     help="YOLOX model variant: l, m, s, tiny, or nano (default: l)",
 )
 parser.add_argument(
     "--conf",
     type=float,
-    default=0.75,
+    default=os.getenv("CONFIDENCE"),
     help="Confidence threshold from 0 to 1, default is 0.75. Use decimals (e.g., 0.83 for 83%).",
 )
 parser.add_argument(
     "-s",
     "--source",
     type=str,
-    default="0",
+    default=os.getenv("SOURCE"),
     help='Source of the camera (0 - webcam[v4l2], "rtsp://localhost:9192/topic1")',
 )
 args = parser.parse_args()
@@ -102,17 +107,20 @@ while True:
 
     # 4. Visualization
     ratio_w, ratio_h = frame.shape[1] / input_size[1], frame.shape[0] / input_size[0]
-    for box, score, cls in zip(final_boxes, final_scores, final_cls):
-        x1, y1, w, h = (
-            box[0] * ratio_w,
-            box[1] * ratio_h,
-            box[2] * ratio_w,
-            box[3] * ratio_h,
-        )
+
+    detections = build_detection_records(
+        final_boxes, final_scores, final_cls, COCO_CLASSES, ratio_w, ratio_h
+    )
+    for det, box in zip(detections, final_boxes):
+        # Visualize box for each detection: det['location'] has four corners
+        x1 = det["location"][0][0]
+        y1 = det["location"][0][1]
+        w = det["location"][1][0] - det["location"][0][0]
+        h = det["location"][2][1] - det["location"][1][1]
         cv2.rectangle(
             frame, (int(x1), int(y1)), (int(x1 + w), int(y1 + h)), (0, 255, 0), 2
         )
-        label = f"{COCO_CLASSES[cls]}: {score:.2f}"
+        label = f"{det['class']}"
         cv2.putText(
             frame,
             label,
@@ -122,6 +130,10 @@ while True:
             (0, 255, 0),
             2,
         )
+
+        # Log with loguru
+        log_key = str(args.source)
+        logger.info(json.dumps({log_key: detections}))
 
     cv2.imshow("YOLOX Live", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
