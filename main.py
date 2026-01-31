@@ -6,10 +6,37 @@ import onnxruntime as ort
 from coco_classes import COCO_CLASSES
 from utils import demo_postprocess, multiclass_nms
 
-# Configuration
-# IMAGE_SIZE = 416
-IMAGE_SIZE = 640
-input_size = (IMAGE_SIZE, IMAGE_SIZE)
+
+parser = argparse.ArgumentParser(description="YOLOX Runtime")
+parser.add_argument(
+    "-d",
+    "--device",
+    type=str,
+    default="cuda",
+    choices=["cpu", "cuda"],
+    help="Select compute device: cpu or cuda (default: cpu)",
+)
+parser.add_argument(
+    "-m",
+    "--model",
+    type=str,
+    default="l",
+    help="YOLOX model variant: l, m, s, tiny, or nano (default: l)",
+)
+parser.add_argument(
+    "--conf",
+    type=float,
+    default=0.75,
+    help="Confidence threshold from 0 to 1, default is 0.75. Use decimals (e.g., 0.83 for 83%).",
+)
+parser.add_argument(
+    "--source",
+    # type=int,
+    # default=0,
+    default="rtsp://localhost:9192/topic1",
+    help="Source of the camera (0 - webcam[v4l2], \"rtsp://localhost:9192/topic1\")",
+)
+args = parser.parse_args()
 
 # Provider mapping
 PROVIDER_MAP = {
@@ -23,31 +50,16 @@ MODEL_SHORT_TO_NAME = {
     "tiny": "yolox_tiny",
     "nano": "yolox_nano",
 }
-CONF_THRESHOLD = 0.8
-
-
-parser = argparse.ArgumentParser(description="YOLOX Runtime")
-parser.add_argument(
-    "-d",
-    "--device",
-    type=str,
-    default="cpu",
-    choices=["cpu", "cuda"],
-    help="Select compute device: cpu or cuda (default: cpu)",
-)
-parser.add_argument(
-    "-m",
-    "--model",
-    type=str,
-    default="l",
-    help="YOLOX model variant: l, m, s, tiny, or nano (default: l)",
-)
-args = parser.parse_args()
-
 PROVIDER = PROVIDER_MAP.get(args.device, "CPUExecutionProvider")
 model_base = MODEL_SHORT_TO_NAME.get(args.model, "yolox_l")
 MODEL = f"model/{model_base}.onnx"
+CONF_THRESHOLD = args.conf
 
+if model_base in ["yolox_tiny", "yolox_nano"]:
+    IMAGE_SIZE = 416
+else:
+    IMAGE_SIZE = 640
+input_size = (IMAGE_SIZE, IMAGE_SIZE)
 
 try:
     session = ort.InferenceSession(MODEL, providers=[PROVIDER])
@@ -56,7 +68,9 @@ except Exception as e:
     print("Falling back to CPUExecutionProvider.")
     session = ort.InferenceSession(MODEL, providers=["CPUExecutionProvider"])
 
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(int(args.source))
+# cap = cv2.VideoCapture(args.source, cv2.CAP_FFMPEG)
+# cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
 while True:
     ret, frame = cap.read()
