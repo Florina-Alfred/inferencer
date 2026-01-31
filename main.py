@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 from coco_classes import COCO_CLASSES
 from utils import demo_postprocess, multiclass_nms, build_detection_records
 
+# Global variable to aggregate results
+global RESULTS
+RESULTS = {}
+
 load_dotenv()
 
 parser = argparse.ArgumentParser(description="YOLOX Runtime")
@@ -43,7 +47,6 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-# Provider mapping
 PROVIDER_MAP = {
     "cpu": "CPUExecutionProvider",
     "cuda": "CUDAExecutionProvider",
@@ -97,10 +100,7 @@ while True:
     # 3. Post-process (Decoding + NMS)
     predictions = demo_postprocess(outputs, input_size)[0]
     boxes = predictions[:, :4]
-    # Multiply objectness by class probabilities
     scores = predictions[:, 4:5] * predictions[:, 5:]
-
-    # boxes already in [x0, y0, w, h] format for OpenCV NMS
     final_boxes, final_scores, final_cls = multiclass_nms(
         boxes, scores, 0.45, CONF_THRESHOLD
     )
@@ -111,8 +111,12 @@ while True:
     detections = build_detection_records(
         final_boxes, final_scores, final_cls, COCO_CLASSES, ratio_w, ratio_h
     )
+
+    # Update global RESULTS variable with the logged results
+    log_key = str(args.source)
+    RESULTS[log_key] = detections
+
     for det, box in zip(detections, final_boxes):
-        # Visualize box for each detection: det['location'] has four corners
         x1 = det["location"][0][0]
         y1 = det["location"][0][1]
         w = det["location"][1][0] - det["location"][0][0]
@@ -131,8 +135,8 @@ while True:
             2,
         )
 
-        # Log with loguru
         log_key = str(args.source)
+        RESULTS[log_key] = detections
         logger.info(json.dumps({log_key: detections}))
 
     cv2.imshow("YOLOX Live", frame)
