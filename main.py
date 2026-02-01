@@ -72,8 +72,8 @@ input_size = (IMAGE_SIZE, IMAGE_SIZE)
 try:
     session = ort.InferenceSession(MODEL, providers=[PROVIDER])
 except Exception as e:
-    print(f"Failed to create ONNX Runtime session with provider {PROVIDER}: {e}")
-    print("Falling back to CPUExecutionProvider.")
+    logger.exception("Failed to create ONNX Runtime session with provider {provider}: {err}", provider=PROVIDER, err=e)
+    logger.info("Falling back to CPUExecutionProvider.")
     session = ort.InferenceSession(MODEL, providers=["CPUExecutionProvider"])
 
 try:

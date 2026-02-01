@@ -1,25 +1,24 @@
 import cv2
-import time
 import json
 import numpy as np
 import onnxruntime as ort
 import socket
+from loguru import logger
 from coco_classes import COCO_CLASSES
 from utils import demo_postprocess, multiclass_nms, build_detection_records
 
+
 def run_inference_stream(
     source,
-    client_addr,
-    client_port,
+    out_queue,
     model_name="l",
     confidence=0.75,
-    device="cpu",
+    device="cuda",
 ):
     """
     Perform inference on a camera/video stream and stream results to a UDP client.
     - source: camera index or stream url
-    - client_addr: destination IP address (str)
-    - client_port: destination port (int)
+    - out_queue: multiprocessing.Queue used to send (frame_count, message) tuples to the server
     - model_name: yolox short model name (l, m, s, tiny, nano)
     - confidence: confidence threshold for detection
     - device: 'cpu' or 'cuda'
@@ -42,12 +41,12 @@ def run_inference_stream(
     IMAGE_SIZE = 416 if model_base in ["yolox_tiny", "yolox_nano"] else 640
     input_size = (IMAGE_SIZE, IMAGE_SIZE)
 
-    print(f"[Worker] Started run_inference_stream with source: {source}, sending to {client_addr}:{client_port}")
+    logger.info("[Worker] Started run_inference_stream with source: {source}", source=source)
     try:
         session = ort.InferenceSession(MODEL, providers=[PROVIDER])
     except Exception as e:
-        print(f"[Worker] Failed to create ONNX Runtime session with provider {PROVIDER}: {e}")
-        print("[Worker] Falling back to CPUExecutionProvider.")
+        logger.exception("[Worker] Failed to create ONNX Runtime session with provider {provider}: {err}", provider=PROVIDER, err=e)
+        logger.info("[Worker] Falling back to CPUExecutionProvider.")
         session = ort.InferenceSession(MODEL, providers=["CPUExecutionProvider"])
 
     # Video source handling
@@ -60,17 +59,16 @@ def run_inference_stream(
         cap = cv2.VideoCapture(src, cv2.CAP_FFMPEG)
         cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
     if not cap or not cap.isOpened():
-        print(f"[Worker] Unable to open video source {source}")
+        logger.error("[Worker] Unable to open video source {source}", source=source)
         return
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    print("[Worker] Video source opened. Entering main loop.")
+    logger.info("[Worker] Video source opened. Entering main loop.")
     try:
         frame_count = 0
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("[Worker] Frame read failed. Exiting loop.")
+                logger.warning("[Worker] Frame read failed. Exiting loop.")
                 break
             frame_count += 1
             img = cv2.resize(frame, input_size).astype(np.float32)
@@ -83,31 +81,35 @@ def run_inference_stream(
             final_boxes, final_scores, final_cls = multiclass_nms(
                 boxes, scores, 0.45, CONF_THRESHOLD
             )
-            ratio_w, ratio_h = frame.shape[1] / input_size[1], frame.shape[0] / input_size[0]
+            ratio_w, ratio_h = (
+                frame.shape[1] / input_size[1],
+                frame.shape[0] / input_size[0],
+            )
             detections = build_detection_records(
                 final_boxes, final_scores, final_cls, COCO_CLASSES, ratio_w, ratio_h
             )
-            # Limit outgoing UDP message to 8192 bytes (prune detections if needed)
+            # Prepare message and hand it to the server via out_queue for broadcasting to clients
+            MAX_UDP_SIZE = 65507
             payload = {"detections": detections}
             while True:
-                message = json.dumps(payload).encode('utf-8')
-                if len(message) <= 8192 or not payload["detections"]:
+                message = json.dumps(payload).encode("utf-8")
+                if len(message) <= MAX_UDP_SIZE or not payload["detections"]:
                     break
-                # Drop the detection with lowest score (if multiple)
-                payload["detections"] = sorted(payload["detections"], key=lambda x: x['score'], reverse=True)[:-1]
-            if len(message) > 8192:
-                print(f"[Worker] Warning: Message truncated for frame {frame_count}")
-                message = message[:8192]
-            # Send the results as a UDP datagram
+                payload["detections"] = sorted(payload["detections"], key=lambda x: x["score"], reverse=True)[:-1]
+            if len(message) > MAX_UDP_SIZE:
+                logger.warning("[Worker] Warning: Message truncated for frame {frame}", frame=frame_count)
+                message = message[:MAX_UDP_SIZE]
             try:
-                sock.sendto(message, (client_addr, client_port))
-                print(f"[Worker] Sent detection result for frame {frame_count} to {client_addr}:{client_port}")
-            except Exception as send_err:
-                print(f"[Worker] Error sending to client: {send_err}")
-            time.sleep(0.04)  # Limit to ~25 FPS to prevent socket buffer overflow
+                out_queue.put((frame_count, message))
+                logger.debug("[Worker] Enqueued detection result for frame {frame}", frame=frame_count)
+            except Exception as q_err:
+                logger.exception("[Worker] Error enqueuing message: {err}", err=q_err)
+            # time.sleep(0.04)  # Limit to ~25 FPS to prevent socket buffer overflow
     finally:
         if cap:
             cap.release()
-        sock.close()
-        print("[Worker] Capture and socket closed.")
-
+        logger.info("[Worker] Capture closed. Signaling shutdown to server.")
+        try:
+            out_queue.put(None)
+        except Exception:
+            pass
