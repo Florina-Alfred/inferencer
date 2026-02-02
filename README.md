@@ -92,5 +92,6 @@ Key files
 - `inference_worker.py` — worker that captures frames, runs ONNX, and sends JSON results
 - `test_udp_client.py` — example client: sends START/HEARTBEAT/STOP and prints received JSON
 - `main.py` — single-process demo
- - `pyproject.toml`, `uv.lock` — dependency manifest and lockfile
- - `setup.py` — helper script to download YOLOX ONNX model files into `model/`
+ - `viewer.py` — subscribes to the UDP server, receives detections and overlays them on the source for live display
+- `pyproject.toml`, `uv.lock` — dependency manifest and lockfile
+- `setup.py` — helper script to download YOLOX ONNX model files into `model/`
