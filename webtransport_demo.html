@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>WebTransport Demo</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 1rem; }
+    pre { background: #111; color: #0f0; padding: 1rem; white-space: pre-wrap; }
+    input, button { margin: .25rem 0; }
+  </style>
+</head>
+<body>
+  <h1>WebTransport Demo</h1>
+  <p>Connects to the bridge and prints received datagrams as UTF-8 text.</p>
+  <label>Bridge URL: <input id="url" value="https://localhost:4433/?source=0" size="48"></label>
+  <div>
+    <button id="connect">Connect</button>
+    <button id="disconnect" disabled>Disconnect</button>
+  </div>
+  <h2>Log</h2>
+  <pre id="log">(no messages yet)</pre>
+
+  <script>
+    const logEl = document.getElementById('log');
+    const connBtn = document.getElementById('connect');
+    const discBtn = document.getElementById('disconnect');
+    const urlInput = document.getElementById('url');
+
+    let wt = null;
+    let reader = null;
+
+    function log(s) {
+      logEl.textContent = (new Date()).toISOString() + ' ' + s + '\n' + logEl.textContent;
+    }
+
+    async function connect() {
+      const url = urlInput.value;
+      log('Connecting to ' + url);
+      try {
+        wt = new WebTransport(url);
+        await wt.ready;
+        log('Connected; creating reader for datagrams');
+
+        // writable example (not used here):
+        // const writer = wt.datagrams.writable.getWriter();
+        // writer.write(new TextEncoder().encode('hello'));
+
+        const readerStream = wt.datagrams.readable;
+        reader = readerStream.getReader();
+
+        connBtn.disabled = true;
+        discBtn.disabled = false;
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          // value is a Uint8Array
+          const text = new TextDecoder().decode(value);
+          log('DATAGRAM: ' + text);
+        }
+
+      } catch (err) {
+        log('Connection failed: ' + err);
+      }
+    }
+
+    async function disconnect() {
+      if (reader) {
+        try { await reader.cancel(); } catch(e) {}
+        reader = null;
+      }
+      if (wt) {
+        try { await wt.close(); } catch(e) {}
+        wt = null;
+      }
+      connBtn.disabled = false;
+      discBtn.disabled = true;
+      log('Disconnected');
+    }
+
+    connBtn.addEventListener('click', connect);
+    discBtn.addEventListener('click', disconnect);
+  </script>
+</body>
+</html>
