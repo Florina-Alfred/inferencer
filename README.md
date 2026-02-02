@@ -10,6 +10,14 @@ Quick start (commands)
   uv sync       # creates .venv and installs pinned deps
   source .venv/bin/activate
   ```
+ - Download ONNX models (required)
+   ```bash
+   # download all YOLOX ONNX models into ./model/
+   uv run setup.py
+
+   # or download a single model (l, m, s, tiny, nano):
+   uv run setup.py -- -m l
+   ```
 - (Optional) Regenerate lockfile after changing dependencies:
   ```bash
   uv lock
@@ -84,4 +92,5 @@ Key files
 - `inference_worker.py` — worker that captures frames, runs ONNX, and sends JSON results
 - `test_udp_client.py` — example client: sends START/HEARTBEAT/STOP and prints received JSON
 - `main.py` — single-process demo
-- `pyproject.toml`, `uv.lock` — dependency manifest and lockfile
+ - `pyproject.toml`, `uv.lock` — dependency manifest and lockfile
+ - `setup.py` — helper script to download YOLOX ONNX model files into `model/`
