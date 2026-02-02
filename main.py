@@ -138,6 +138,8 @@ while True:
         log_key = str(args.source)
         RESULTS[log_key] = detections
         logger.info(json.dumps({log_key: detections}))
+        # print(detections[0]["class"])
+
 
     cv2.imshow("YOLOX Live", frame)
     if cv2.waitKey(1) & 0xFF == ord("q"):
