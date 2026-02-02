@@ -1,0 +1,9 @@
+2026-02-02 15:22:14.665 | INFO     | __main__:serve:326 - gRPC inference server started on 0.0.0.0:50051
+2026-02-02 15:22:19.305 | INFO     | __main__:serve:331 - shutting down server
+2026-02-02 15:22:20.578 | INFO     | __main__:serve:326 - gRPC inference server started on 0.0.0.0:50051
+2026-02-02 15:22:31.865 | INFO     | __main__:serve:331 - shutting down server
+2026-02-02 15:22:32.766 | INFO     | __main__:serve:326 - gRPC inference server started on 0.0.0.0:50051
+2026-02-02 15:22:38.585 | INFO     | __main__:serve:331 - shutting down server
+2026-02-02 15:22:51.135 | INFO     | __main__:serve:326 - gRPC inference server started on 0.0.0.0:50051
+2026-02-02 15:22:59.517 | INFO     | __main__:serve:331 - shutting down server
+2026-02-02 15:23:00.990 | INFO     | __main__:serve:326 - gRPC inference server started on 0.0.0.0:50051
