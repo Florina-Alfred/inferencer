@@ -6,3 +6,11 @@ ffmpeg \
 -crf 18 -pix_fmt yuv420p \
 -f rtsp -rtsp_transport tcp rtsp://localhost:9191/topic1
 
+ffmpeg \
+-re -stream_loop -1 -i data/detection.mp4 \
+-vcodec libx264 -preset ultrafast -tune zerolatency \
+-crf 18 -pix_fmt yuv420p \
+-f rtsp -rtsp_transport tcp rtsp://localhost:9191/topic1
+
+
+ffplay -rtsp_transport tcp rtsp://localhost:9192/topic2
