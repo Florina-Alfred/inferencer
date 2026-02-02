@@ -12,5 +12,4 @@ ffmpeg \
 -crf 18 -pix_fmt yuv420p \
 -f rtsp -rtsp_transport tcp rtsp://localhost:9191/topic1
 
-
-ffplay -rtsp_transport tcp rtsp://localhost:9192/topic2
+ffplay -rtsp_transport tcp rtsp://localhost:9192/topic1
