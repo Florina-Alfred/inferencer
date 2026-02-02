@@ -5,21 +5,21 @@ AGENTS
 - Location: repository root (this file).
 
 
-- Running & Development
-- - Create a virtualenv and install: `python -m venv .venv && source .venv/bin/activate && pip install -e .`
-- - Install runtime deps (if you don't use editable install): `pip install -r requirements.txt` (not included) or `pip install -e .`
-- - Quick run: server and client are plain Python scripts, run without a test framework.
-- - Start the UDP inference server: `python udp_infer_server.py`
-- - Run the example live demo / single-process main: `python main.py --device cpu --model l --source 0`
-- - Run the inference worker directly (useful for debugging):
--   - From python: `python -c "from inference_worker import run_inference_stream; run_inference_stream('0','127.0.0.1',56060)"`
--   - Or run as module/script by adding a short wrapper if needed.
+ - Running & Development
+ - - Create a virtualenv and install dependencies (recommended): `uv sync` — this creates `.venv` and installs locked dependencies; then `source .venv/bin/activate` to enter the venv.
+ - - If you change dependencies: run `uv lock` to regenerate `uv.lock`, then `uv sync` on other machines to apply the lock.
+ - - Quick run: server and client are plain Python scripts; use `uv run` to execute them so the locked venv is used.
+ - - - Start the UDP inference server: `uv run udp_infer_server.py`
+ - - - Run the example live demo / single-process main: `uv run main.py -- --device cpu --model l --source 0`
+ - - - Run the inference worker directly (useful for debugging):
+ - -   - From python (inside the venv): `python -c "from inference_worker import run_inference_stream; run_inference_stream('0','127.0.0.1',56060)"`
+ - -   - Or use the run wrapper: `uv run run_worker.py 0 127.0.0.1 56060`
 
 
-- Tests
-- - This repository contains one helper/test script `test_udp_client.py` that is not a pytest-style unit test; it is a runnable client you use to exercise the server.
-- - Run the script (single "test"): `python test_udp_client.py [SOURCE]`
--   - Example: `python test_udp_client.py 0` will send START/HEARTBEAT/STOP messages for source `0` to the server running on `127.0.0.1:55055` and listen on client port `56060`.
+ - Tests
+ - - This repository contains one helper/test script `test_udp_client.py` that is not a pytest-style unit test; it is a runnable client you use to exercise the server.
+ - - Run the script (single "test"): `uv run test_udp_client.py [SOURCE]`
+ - -   - Example: `uv run test_udp_client.py 0` will send START/HEARTBEAT/STOP messages for source `0` to the server running on `127.0.0.1:55055` and listen on client port `56060`.
 - - If you want to run tests with pytest you can do the following (recommended for CI/unit tests):
 -   1) Convert or wrap `test_udp_client.py` logic into proper pytest tests (create `tests/` and functions prefixed with `test_`).
 -   2) Run all tests: `pytest -q`
@@ -27,10 +27,10 @@ AGENTS
 - - Tips for single-file/script debugging: use `PYTHONPATH=.` when running from another working directory, or `python -m test_udp_client` if you add a package wrapper.
 
 
-- Build / Packaging
-- - This project uses a minimal `pyproject.toml` and `setup.py` exists. For developer installs use editable install:
--   - `pip install -e .`
-- - For building sdist/wheel: `python -m build` (requires `build` package: `pip install build`) then `twine upload dist/*` to publish.
+ - Build / Packaging
+ - - This project uses a minimal `pyproject.toml` and `setup.py` exists. For developer installs use the locked environment:
+ - -   - `uv sync` to create and install the venv with pinned deps. If you explicitly need an editable install, run `pip install -e .` inside the activated venv.
+ - - - For building sdist/wheel: `python -m build` (requires the `build` package) then `twine upload dist/*` to publish.
 
 
 - Linting & Formatting (recommended toolchain)
@@ -41,8 +41,8 @@ AGENTS
 -   - `max-line-length = 88`
 -   - `extend-ignore = E203, W503` (if using black compatibility)
 - - Run a focused lint pass on one file: `black path/to/file.py && isort path/to/file.py && flake8 path/to/file.py`
-- - Pre-commit: strongly recommend installing `pre-commit` and enabling hooks:
--   - `pip install pre-commit && pre-commit install && pre-commit run --all-files`
+ - - - Pre-commit: strongly recommend installing `pre-commit` and enabling hooks:
+ - -   - Ensure `pre-commit` is installed in the venv (e.g. via `uv sync`), then run `pre-commit install && pre-commit run --all-files` inside the activated venv.
 
 
 - Code Style Guidelines
@@ -92,10 +92,10 @@ AGENTS
 - - GitHub Copilot instructions: none found at `.github/copilot-instructions.md`.
 
 
-- Recommended Next Actions For Agents
-- 1) Run `python udp_infer_server.py` in one shell and `python test_udp_client.py 0` in another to exercise the end-to-end UDP flow.
-- 2) Add a `tests/` directory and convert `test_udp_client.py` to a pytest-based integration test (wrap process lifecycle in fixtures).
-- 3) Add `pyproject.toml` tool configs for `black`, `isort`, `mypy`, and `flake8` to ensure CI formatting and type checks are reproducible.
+ - Recommended Next Actions For Agents
+ - 1) Run `uv run udp_infer_server.py` in one shell and `uv run test_udp_client.py 0` in another to exercise the end-to-end UDP flow.
+ - 2) Add a `tests/` directory and convert `test_udp_client.py` to a pytest-based integration test (wrap process lifecycle in fixtures).
+ - 3) Add `pyproject.toml` tool configs for `black`, `isort`, `mypy`, and `flake8` to ensure CI formatting and type checks are reproducible.
 
 
 - Contact / Maintainer Notes
