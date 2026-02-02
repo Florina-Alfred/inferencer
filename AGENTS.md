@@ -33,16 +33,13 @@ AGENTS
  - - - For building sdist/wheel: `python -m build` (requires the `build` package) then `twine upload dist/*` to publish.
 
 
-- Linting & Formatting (recommended toolchain)
-- - Formatting: `black` (line-length 88). Run: `black .`
-- - Import sorting: `isort .` (use `--profile black` to align with black formatting)
-- - Static typing: `mypy .` (recommend enabling incremental mode in CI)
-- - Linting / style: `flake8 .` with plugins as desired. Example config values:
--   - `max-line-length = 88`
--   - `extend-ignore = E203, W503` (if using black compatibility)
-- - Run a focused lint pass on one file: `black path/to/file.py && isort path/to/file.py && flake8 path/to/file.py`
- - - - Pre-commit: strongly recommend installing `pre-commit` and enabling hooks:
- - -   - Ensure `pre-commit` is installed in the venv (e.g. via `uv sync`), then run `pre-commit install && pre-commit run --all-files` inside the activated venv.
+ - Linting & Formatting (recommended toolchain)
+ - - Formatting: `black` (line-length 88). Run: `black .`
+ - - Linting & autofix: `ruff` — a fast linter/formatter/autofixer that can replace `isort`/`flake8` workflows. Run: `ruff check .` and auto-fix with `ruff format --fix .`.
+ - - Import sorting & minor fixes: configure `ruff` in `pyproject.toml` to handle import sorting and rule sets consistently across the repo.
+ - - Static typing: `mypy .` (recommend enabling incremental mode in CI)
+ - - Run a focused lint pass on one file: `black path/to/file.py && ruff check path/to/file.py`
+ - - Pre-commit: strongly recommend installing `pre-commit` and enabling hooks inside the venv. Add `ruff` and `black` hooks to `.pre-commit-config.yaml` and run `pre-commit install && pre-commit run --all-files`.
 
 
 - Code Style Guidelines
