@@ -65,6 +65,15 @@ Quick start (commands)
   uv run run_worker.py 0 127.0.0.1 56060
   ```
 
+- Run the viewer (opens the source and overlays detections received from the server)
+  ```bash
+  # RTSP example
+  uv run viewer.py rtsp://localhost:9192/topic1 127.0.0.1 55055 56070
+
+  # Local device example
+  uv run viewer.py /dev/video0 127.0.0.1 55055 56071
+  ```
+
 Notes & troubleshooting
 - This code sends JSON detection datagrams over UDP; clients must bind a UDP port and send a `START|<source>|<port>` message to the server to receive results. See `test_udp_client.py` for the exact control protocol.
 - If camera capture fails: check permissions (`sudo usermod -aG video $USER`), ensure no other process holds the device, or try using the numeric camera index (`0`).
