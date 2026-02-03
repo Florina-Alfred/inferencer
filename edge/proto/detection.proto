@@ -1,0 +1,33 @@
+syntax = "proto3";
+package edge;
+
+message ImageRequest {
+  string source = 1;
+  string image_b64 = 2;
+  int32 width = 3;
+  int32 height = 4;
+  int64 timestamp_ms = 5;
+  int64 seq = 6;
+}
+
+message Detection {
+  int32 class_id = 1;
+  float score = 2;
+  float xmin = 3;
+  float ymin = 4;
+  float xmax = 5;
+  float ymax = 6;
+  string class_name = 7;
+}
+
+message DetectionResponse {
+  string source = 1;
+  repeated Detection found = 2;
+  int64 timestamp_ms = 3;
+  int64 seq = 4;
+  int64 processing_ms = 5;
+}
+
+service Inference {
+  rpc Stream (stream ImageRequest) returns (stream DetectionResponse) {}
+}
