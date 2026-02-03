@@ -45,6 +45,12 @@ def capture_thread(cap, q: queue.Queue, stop_event: threading.Event, width: int,
         if not ret:
             time.sleep(0.05)
             continue
+        # keep a full-resolution copy for display
+        try:
+            # store full-res for overlay/display in the main thread
+            last_frame_container['frame'] = frame.copy()
+        except Exception:
+            last_frame_container['frame'] = frame
         small = cv2.resize(frame, (width, height))
         try:
             b64 = jpeg_b64_from_frame(small, quality)
@@ -88,6 +94,11 @@ def main():
 
     q: queue.Queue = queue.Queue(maxsize=1)
     stop_event = threading.Event()
+    last_frame_container: dict = { 'frame': None }
+    last_frame_lock = threading.Lock()
+    # pass shared container and lock to capture thread via globals closure
+    globals()['last_frame_container'] = last_frame_container
+    globals()['last_frame_lock'] = last_frame_lock
     t = threading.Thread(target=capture_thread, args=(cap, q, stop_event, args.width, args.height, args.quality), daemon=True)
     t.start()
 
@@ -103,16 +114,44 @@ def main():
             except Exception:
                 found_count = 0
             logger.info("Received DetectionResponse source={} seq={} processing_ms={} found={}", resp.source, getattr(resp, 'seq', 0), getattr(resp, 'processing_ms', 0), found_count)
+            # overlay detections on the latest full-resolution frame and show
+            with last_frame_lock:
+                frame = last_frame_container.get('frame')
+                if frame is None:
+                    # nothing to display yet
+                    continue
+                display = frame.copy()
             for d in resp.found:
                 try:
-                    logger.info("Detection: class_name={} class_id={} score={} bbox={}..{}", d.class_name, d.class_id, d.score, (d.xmin, d.ymin), (d.xmax, d.ymax))
+                    xmin = int(d.xmin)
+                    ymin = int(d.ymin)
+                    xmax = int(d.xmax)
+                    ymax = int(d.ymax)
+                    class_name = d.class_name if getattr(d, 'class_name', '') else str(d.class_id)
+                    score = float(getattr(d, 'score', 0.0))
+                    # draw box and label
+                    cv2.rectangle(display, (xmin, ymin), (xmax, ymax), (0, 255, 0), 2)
+                    label = f"{class_name}:{score:.2f}"
+                    cv2.putText(display, label, (xmin, max(ymin - 6, 0)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+                    logger.info("Detection: class_name={} class_id={} score={} bbox={}..{}", class_name, d.class_id, score, (xmin, ymin), (xmax, ymax))
                 except Exception:
                     logger.exception("Malformed detection message")
+            # show display
+            try:
+                cv2.imshow('sensor', display)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+            except Exception:
+                logger.exception('Failed to display frame')
     except KeyboardInterrupt:
         pass
     finally:
         stop_event.set()
         cap.release()
+        try:
+            cv2.destroyAllWindows()
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
