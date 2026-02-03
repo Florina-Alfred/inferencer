@@ -11,12 +11,25 @@ import threading
 import cv2
 import grpc
 import numpy as np
+from loguru import logger
+import sys
+
+# configure loguru
+logger.remove()
+logger.add(sys.stderr, level="INFO", enqueue=True)
+
+import sys
+import os
+# ensure repo root on sys.path so package imports work when executed directly
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 try:
     from edge.proto import detection_pb2 as pb
     from edge.proto import detection_pb2_grpc as pb_grpc
 except Exception as e:  # pragma: no cover - helpful
-    raise RuntimeError('gRPC stubs missing: run `python generate.py` in edge/') from e
+    raise RuntimeError('gRPC stubs missing: run `python generate.py` in edge/ (and run from repo root)') from e
 
 
 def jpeg_b64_from_frame(frame: np.ndarray, quality: int = 70) -> str:
@@ -84,8 +97,17 @@ def main():
     responses = stub.Stream(request_generator(q, stop_event))
     try:
         for resp in responses:
-            # simple logging of detections
-            print(f"resp source={resp.source} seq={resp.seq} processing_ms={resp.processing_ms} found={len(resp.found)}")
+            # simple logging of detections via loguru
+            try:
+                found_count = len(resp.found)
+            except Exception:
+                found_count = 0
+            logger.info("Received DetectionResponse source={} seq={} processing_ms={} found={}", resp.source, getattr(resp, 'seq', 0), getattr(resp, 'processing_ms', 0), found_count)
+            for d in resp.found:
+                try:
+                    logger.info("Detection: class_name={} class_id={} score={} bbox={}..{}", d.class_name, d.class_id, d.score, (d.xmin, d.ymin), (d.xmax, d.ymax))
+                except Exception:
+                    logger.exception("Malformed detection message")
     except KeyboardInterrupt:
         pass
     finally:

@@ -10,16 +10,31 @@ import base64
 import time
 from concurrent import futures
 import os
+import sys
 
 import grpc
 import cv2
 import numpy as np
+from loguru import logger
+import sys
+
+# configure loguru
+logger.remove()
+logger.add(sys.stderr, level="INFO", enqueue=True)
+
+# Ensure repository root is on sys.path so `from edge.proto` works when this
+# script is executed directly (python edge/infer_server.py) which would
+# otherwise make the interpreter treat `edge/` as sys.path[0] and break package
+# imports.
+repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
 
 try:
     from edge.proto import detection_pb2 as pb
     from edge.proto import detection_pb2_grpc as pb_grpc
 except Exception as e:  # pragma: no cover - helpful error
-    raise RuntimeError("gRPC stubs missing: run `python generate.py` in edge/") from e
+    raise RuntimeError("gRPC stubs missing: run `python generate.py` in edge/ (and run from repo root)") from e
 
 from coco_classes import COCO_CLASSES
 from utils import demo_postprocess, multiclass_nms, build_detection_records
@@ -68,7 +83,7 @@ def infer_frame(session, model_base: str, frame: np.ndarray, conf_threshold: flo
 
 
 class InferenceServicer(pb_grpc.InferenceServicer):
-    def __init__(self, model: str = "l", device: str = "cpu", conf: float = 0.5):
+    def __init__(self, model: str = "l", device: str = "cuda", conf: float = 0.5):
         self.session, self.model_base = make_session(model, device)
         self.conf = conf
 
@@ -76,16 +91,19 @@ class InferenceServicer(pb_grpc.InferenceServicer):
         for req in request_iterator:
             t0 = time.time()
             try:
+                logger.info("Received ImageRequest source={} seq={} width={} height={}", req.source, getattr(req, 'seq', 0), getattr(req, 'width', 0), getattr(req, 'height', 0))
                 img_b64 = req.image_b64
                 img_bytes = base64.b64decode(img_b64)
                 arr = np.frombuffer(img_bytes, dtype=np.uint8)
                 img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
                 if img is None:
+                    logger.warning("Failed to decode image from source={} seq={}", req.source, getattr(req, 'seq', 0))
                     # send empty response
                     resp = pb.DetectionResponse(source=req.source, timestamp_ms=int(time.time()*1000), seq=req.seq)
                     yield resp
                     continue
                 records = infer_frame(self.session, self.model_base, img, self.conf)
+                logger.info("Inference done for source={} seq={} detections={}", req.source, getattr(req, 'seq', 0), len(records))
                 # convert records to proto
                 proto_dets = []
                 for r in records:
@@ -94,14 +112,19 @@ class InferenceServicer(pb_grpc.InferenceServicer):
                     br = r['location'][2]
                     xmin, ymin = float(tl[0]), float(tl[1])
                     xmax, ymax = float(br[0]), float(br[1])
-                    det = pb.Detection(class_id=COCO_CLASSES.index(r['class']) if r['class'] in COCO_CLASSES else 0,
-                                       score=float(r.get('score', 0.0)), xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax,
-                                       class_name=str(r.get('class', '')))
+                    class_name = r.get('class', '')
+                    score = float(r.get('score', 0.0))
+                    det = pb.Detection(class_id=COCO_CLASSES.index(class_name) if class_name in COCO_CLASSES else 0,
+                                       score=score, xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax,
+                                       class_name=str(class_name))
                     proto_dets.append(det)
+                    logger.info("Detection: source={} class_name={} score={} bbox={}..{}", req.source, class_name, score, (xmin, ymin), (xmax, ymax))
                 processing_ms = int((time.time() - t0) * 1000)
-                resp = pb.DetectionResponse(source=req.source, found=proto_dets, timestamp_ms=int(time.time()*1000), seq=req.seq, processing_ms=processing_ms)
+                resp = pb.DetectionResponse(source=req.source, found=proto_dets, timestamp_ms=int(time.time()*1000), seq=getattr(req, 'seq', 0), processing_ms=processing_ms)
+                logger.info("Sending DetectionResponse source={} seq={} processing_ms={}", resp.source, resp.seq, resp.processing_ms)
                 yield resp
             except Exception:
+                logger.exception("Error handling request from source={}", getattr(req, 'source', ''))
                 # send empty response on error
                 resp = pb.DetectionResponse(source=getattr(req, 'source', ''), timestamp_ms=int(time.time()*1000), seq=getattr(req, 'seq', 0))
                 yield resp
