@@ -121,12 +121,34 @@ def main():
                     # nothing to display yet
                     continue
                 display = frame.copy()
+            full_h, full_w = display.shape[:2]
             for d in resp.found:
                 try:
-                    xmin = int(d.xmin)
-                    ymin = int(d.ymin)
-                    xmax = int(d.xmax)
-                    ymax = int(d.ymax)
+                    # Determine coordinate system and scale to full-res frame.
+                    # Possible cases from server:
+                    # - normalized coords in [0,1] -> multiply by full dims
+                    # - small-frame pixel coords (based on args.width/args.height) -> scale by full/small
+                    # - already full-frame pixel coords -> use directly
+                    def scale_coord(x, axis_max, small_dim):
+                        # x: incoming coordinate
+                        try:
+                            xf = float(x)
+                        except Exception:
+                            return 0
+                        if 0.0 <= xf <= 1.0:
+                            # normalized
+                            return int(round(xf * axis_max))
+                        # if within small dim, assume coords are in small-frame pixels
+                        if 0 <= xf <= small_dim:
+                            scale = axis_max / float(small_dim)
+                            return int(round(xf * scale))
+                        # otherwise assume already full pixels
+                        return int(round(xf))
+
+                    xmin = scale_coord(d.xmin, full_w, args.width)
+                    ymin = scale_coord(d.ymin, full_h, args.height)
+                    xmax = scale_coord(d.xmax, full_w, args.width)
+                    ymax = scale_coord(d.ymax, full_h, args.height)
                     class_name = d.class_name if getattr(d, 'class_name', '') else str(d.class_id)
                     score = float(getattr(d, 'score', 0.0))
                     # draw box and label
