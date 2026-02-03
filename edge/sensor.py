@@ -21,35 +21,8 @@ repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
-import importlib
-try:
-    # Protect against protobuf runtime/gencode mismatches which raise at import time
-    try:
-        import google.protobuf.runtime_version as _pb_runtime
-        _orig_validate = getattr(_pb_runtime, "ValidateProtobufRuntimeVersion", None)
-
-        def _safe_validate(domain, major, minor, patch, suffix, filename):
-            try:
-                if _orig_validate is not None:
-                    return _orig_validate(domain, major, minor, patch, suffix, filename)
-            except Exception:
-                import warnings
-
-                warnings.warn(f"Ignored protobuf runtime/gencode mismatch during import")
-                return None
-
-        setattr(_pb_runtime, "ValidateProtobufRuntimeVersion", _safe_validate)
-    except Exception:
-        # ignore if protobuf runtime isn't present; let subsequent imports show useful errors
-        pass
-
-    # Import package-qualified proto module first, then alias bare name so generated
-    # grpc files using `import infer_pb2` resolve correctly.
-    infer_pb2 = importlib.import_module("edge.proto.infer_pb2")
-    sys.modules.setdefault("infer_pb2", infer_pb2)
-    infer_pb2_grpc = importlib.import_module("edge.proto.infer_pb2_grpc")
-except Exception:
-    raise RuntimeError("gRPC stubs not found. Run `cd edge && make gen` (requires grpcio-tools).")
+import edge.shim  # centralized shim to prepare/import generated stubs
+from edge.proto import infer_pb2, infer_pb2_grpc
 
 from loguru import logger
 logger.remove()
@@ -143,7 +116,7 @@ def overlay_detections(frame: np.ndarray, detections):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=50051)
     parser.add_argument("--source", default=0, help="cv2 capture source (int) or path")
     parser.add_argument("--width", type=int, default=320)

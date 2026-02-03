@@ -10,70 +10,25 @@ import concurrent.futures
 import logging
 import time
 
+import os
+import sys
 import cv2
 import numpy as np
 import grpc
-import os
-import sys
-import importlib
+import edge.shim  # centralized import/runtime shim; prepares generated stubs
+from edge.proto import infer_pb2, infer_pb2_grpc
 
-# When this script is executed as `python edge/infer_server.py` the module search
-# path's first entry becomes the `edge/` directory which prevents importing the
-# `edge` package. Ensure the repository root is on sys.path so package imports work
-# regardless of invocation style.
+# repository root (used for logs and model paths)
 repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
-
-try:
-    # Some generated proto stubs may have been produced with a different
-    # protoc/gencode version than the installed protobuf runtime. The
-    # generated `infer_pb2.py` calls
-    # `google.protobuf.runtime_version.ValidateProtobufRuntimeVersion(...)`
-    # at import time which raises a VersionError when versions mismatch.
-    # To avoid forcing regeneration or editing generated files, patch the
-    # validator to a safe wrapper that logs and ignores version mismatches.
-    try:
-        import google.protobuf.runtime_version as _pb_runtime
-        _orig_validate = getattr(_pb_runtime, "ValidateProtobufRuntimeVersion", None)
-
-        def _safe_validate(domain, major, minor, patch, suffix, filename):
-            try:
-                if _orig_validate is not None:
-                    return _orig_validate(domain, major, minor, patch, suffix, filename)
-            except Exception as _e:  # pragma: no cover - defensive
-                import warnings
-
-                warnings.warn(f"Ignored protobuf runtime/gencode mismatch: {_e}")
-                return None
-
-        setattr(_pb_runtime, "ValidateProtobufRuntimeVersion", _safe_validate)
-    except Exception:
-        # If protobuf runtime isn't available for some reason, continue and let
-        # the real import error surface; we don't want to hide unrelated import failures.
-        pass
-
-    # Import package-qualified modules first
-    infer_pb2 = importlib.import_module("edge.proto.infer_pb2")
-    # Some generated grpc files use bare `import infer_pb2` which fails when
-    # importing as a package. Add an alias in sys.modules so those bare imports
-    # resolve to our package module without modifying generated files.
-    sys.modules.setdefault("infer_pb2", infer_pb2)
-    infer_pb2_grpc = importlib.import_module("edge.proto.infer_pb2_grpc")
-except Exception as e:
-    raise RuntimeError(
-        "gRPC stubs not found in edge/proto. Run `cd edge && python generate_stubs.py`"
-    ) from e
 
 import onnxruntime as ort
 from coco_classes import COCO_CLASSES
 from utils import demo_postprocess, multiclass_nms
 from loguru import logger
 
-    # configure loguru: stdout + rotating file sink so logs are visible under uv and in files
+# configure loguru: stdout + rotating file sink so logs are visible under uv and in files
 logger.remove()
-import sys as _sys
-logger.add(_sys.stdout, level="INFO", colorize=True, enqueue=True)
+logger.add(sys.stdout, level="INFO", colorize=True, enqueue=True)
 logfile = os.path.join(repo_root, "edge", "edge_server.log")
 logger.add(logfile, rotation="10 MB", retention="7 days", enqueue=True)
 

@@ -11,3 +11,15 @@ wheels/
 
 # Ignore all ONNX model files
 *.onnx
+ 
+# Logs and local runtime artifacts
+*.log
+edge/*.log
+.env
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+.coverage
+coverage.xml
+.DS_Store
