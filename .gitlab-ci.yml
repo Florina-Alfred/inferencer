@@ -1,0 +1,105 @@
+# GitLab CI: lint + tests on two OS images (Debian-based python image & Ubuntu LTS)
+# Uses project's `uv` workflow to create .venv and install pinned deps
+
+variables:
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  VENV_PATH: "$CI_PROJECT_DIR/.venv"
+  PYTEST_ARGS: "-q --junitxml=reports/junit.xml --maxfail=1"
+
+stages:
+  - prepare
+  - lint
+  - test
+
+.default-cache:
+  cache:
+    key: "${CI_JOB_NAME}-${CI_COMMIT_REF_SLUG}"
+    paths:
+      - .cache/pip
+      - .venv
+
+# Validate generated protos on two OS images
+proto_check:
+  stage: prepare
+  image: $CI_IMAGE
+  parallel:
+    matrix:
+      - CI_IMAGE: "python:3.11-slim-bullseye"
+      - CI_IMAGE: "ubuntu:22.04"
+  before_script:
+    - |
+      if [ "$CI_IMAGE" = "ubuntu:22.04" ]; then
+        apt-get update -qq
+        apt-get install -y --no-install-recommends python3 python3-venv python3-pip build-essential git curl
+        python3 -m pip install --upgrade pip
+        ln -s /usr/bin/python3 /usr/bin/python || true
+      fi
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv sync
+  script:
+    - uv run python edge/generate.py
+    - |
+      if [ -n "$(git status --porcelain edge/proto)" ]; then
+        echo "Generated proto stubs are out of date. Please run 'uv run python edge/generate.py' and commit changes."
+        git --no-pager --no-color diff -- edge/proto || true
+        exit 1
+      fi
+  extends: .default-cache
+
+# Lint/format checks (single canonical image)
+format_check:
+  image: python:3.11-slim-bullseye
+  stage: lint
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv sync
+  script:
+    - uv run ruff check .
+    - uv run black --check .
+    - uv run ruff check --select I || true
+  extends: .default-cache
+
+# Type checking with mypy (allowed to fail)
+mypy_check:
+  image: python:3.11-slim-bullseye
+  stage: lint
+  before_script:
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv sync
+  script:
+    - uv run mypy .
+  allow_failure: true
+  extends: .default-cache
+
+# Unit tests on both OS images
+unit_tests:
+  stage: test
+  image: $CI_IMAGE
+  parallel:
+    matrix:
+      - CI_IMAGE: "python:3.11-slim-bullseye"
+      - CI_IMAGE: "ubuntu:22.04"
+  before_script:
+    - |
+      if [ "$CI_IMAGE" = "ubuntu:22.04" ]; then
+        apt-get update -qq
+        apt-get install -y --no-install-recommends python3 python3-venv python3-pip build-essential git curl
+        python3 -m pip install --upgrade pip
+        ln -s /usr/bin/python3 /usr/bin/python || true
+      fi
+    - python -m pip install --upgrade pip
+    - python -m pip install uv
+    - uv sync
+  script:
+    - mkdir -p reports
+    - uv run pytest $PYTEST_ARGS
+  artifacts:
+    when: always
+    reports:
+      junit: reports/junit.xml
+    paths:
+      - reports/junit.xml
+  extends: .default-cache
