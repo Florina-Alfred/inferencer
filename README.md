@@ -1,4 +1,5 @@
-Inferencer — UDP inference demo
+Inferencer — local UDP inference demo that captures video, runs YOLOX (ONNX) inference,
+and streams JSON detection datagrams over UDP to subscribing clients.
 
 What it is
 - Local demo: captures video, runs inference, and streams JSON detection datagrams over UDP to clients.
@@ -27,6 +28,9 @@ Quick start (commands)
     ```bash
     docker run -p 9191:9191 -p 9192:9192 -p 8080:8080 ghcr.io/florina-alfred/rtsper:latest
     ```
+    - The RTSP server image is maintained at
+      [florina-alfred/rtsper](https://github.com/florina-alfred/rtsper) (GHCR image
+      `ghcr.io/florina-alfred/rtsper:latest`).
   - Stream a local V4L2 device to the RTSP server (replace `/dev/video0` as needed):
     ```bash
     ffmpeg \
